@@ -1,0 +1,13 @@
+name: 'Composer Fork Status'
+description: 'Generates a markdown table reporting the status of forks in composer.json (branch, PR, merge, age, description).'
+author: 'Ed Wilde'
+branding:
+  color: green
+  icon: git-pull-request
+inputs: {}
+outputs:
+  fork_status:
+    description: 'Markdown table of fork/PR status for composer.json forks'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'

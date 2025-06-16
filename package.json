@@ -1,0 +1,9 @@
+{
+  "name": "composer-forks-action",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "fork-status.js",
+  "dependencies": {
+    "node-fetch": "^2.6.7"
+  }
+}
