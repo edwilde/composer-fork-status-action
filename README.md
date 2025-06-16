@@ -11,7 +11,7 @@ In your workflow, define a step which refers to the action:
     # ...
     - name: Composer Fork Status
       id: composer_fork_status
-      uses: edwilde/composer-fork-status-action@2
+      uses: edwilde/composer-fork-status-action@1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
