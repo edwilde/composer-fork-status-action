@@ -19,7 +19,7 @@ import fs from 'fs';
 import https from 'https';
 
 // Path to composer.json (can be overridden by env var)
-const composerPath = process.env.COMPOSER_JSON || '../fenz-hazard/composer.json';
+const composerPath = process.env.COMPOSER_JSON || './composer.json';
 // Read and parse composer.json
 const composer = JSON.parse(fs.readFileSync(composerPath, 'utf8'));
 // Merge require and require-dev into a single dependencies object
