@@ -32,9 +32,6 @@ const forks = (composer.repositories || []).filter(r => r.type === 'vcs' && r.ur
 const tableHeader = '| Age | Package | Branch | Fork PR | Merged | Description |';
 const tableDivider = '| ---- | ------- | ------ | ------- | ------ | ----------- |';
 
-console.log(tableHeader);
-console.log(tableDivider);
-
 /**
  * Make a GET request to the GitHub API and parse the JSON response.
  * Prints debug info if DEBUG=1 is set.
@@ -236,10 +233,25 @@ async function getForkStatus(fork) {
   return `| ${age} | ${pkgLink} | ${branchLink} | ${forkPr} | ${forkMerged} | ${description} |`;
 }
 
-// Main async runner: process each fork and print the table row
+// Main async runner: process each fork and build the table
 (async () => {
+  const output = [tableHeader, tableDivider];
   for (const fork of forks) {
     const row = await getForkStatus(fork);
-    console.log(row);
+    output.push(row);
+  }
+
+  const finalOutput = output.join('\n');
+
+  // Log to console for debugging/visibility in action logs
+  console.log(finalOutput);
+
+  // Set the action output
+  if (process.env.GITHUB_OUTPUT) {
+    // Use a unique delimiter for the multiline output
+    const delimiter = `EOF_${Math.random().toString(36).substring(7)}`;
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `fork_status<<${delimiter}\n`);
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `${finalOutput}\n`);
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `${delimiter}\n`);
   }
 })();
