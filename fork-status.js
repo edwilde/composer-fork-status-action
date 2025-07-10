@@ -18,6 +18,69 @@
 import fs from 'fs';
 import https from 'https';
 
+/**
+ * Debug utility function to log messages when DEBUG=1 is set
+ * Sends debug output to stderr so it doesn't interfere with the table output
+ * @param {...any} args - Arguments to log (same format as console.error)
+ */
+function debug(...args) {
+  // Early return if DEBUG is not enabled
+  if (!process.env.DEBUG) return;
+
+  console.error('DEBUG:', ...args);
+}
+
+/**
+ * Normalize a GitHub URL to a consistent HTTPS format
+ * @param {string} url - The GitHub URL to normalize
+ * @returns {string} - Normalized HTTPS GitHub URL
+ */
+function normalizeGitHubUrl(url) {
+  return url
+    .replace('git@github.com:', 'https://github.com/')
+    .replace('git://github.com/', 'https://github.com/')
+    .replace('https://github.com/', 'https://github.com/');
+}
+
+/**
+ * Get package name from GitHub repository by fetching its composer.json
+ * @param {string} owner - Repository owner
+ * @param {string} repo - Repository name
+ * @param {string} branch - Optional branch name, defaults to main/master
+ * @returns {Promise<string|null>} - Package name or null if not found
+ */
+async function getPackageNameFromRepo(owner, repo, branch = null) {
+  try {
+    // Try common default branches if no branch specified
+    const branchesToTry = branch ? [branch] : ['main', 'master', 'develop'];
+
+    for (const branchName of branchesToTry) {
+      debug(`Trying to fetch composer.json from ${owner}/${repo} branch ${branchName}`);
+
+      // Build the URL to the raw composer.json file
+      const composerJsonPath = `/repos/${owner}/${repo}/contents/composer.json?ref=${branchName}`;
+      const repoContent = await githubApi(composerJsonPath);
+
+      if (repoContent && repoContent.content) {
+        // Content is base64 encoded
+        const contentBuffer = Buffer.from(repoContent.content, 'base64');
+        const composerJson = JSON.parse(contentBuffer.toString());
+
+        if (composerJson.name) {
+          debug(`Found package name in composer.json: ${composerJson.name}`);
+          return composerJson.name;
+        }
+      }
+    }
+
+    debug(`No composer.json found or no name property in ${owner}/${repo}`);
+    return null;
+  } catch (e) {
+    debug(`Error fetching composer.json for ${owner}/${repo}:`, e.message);
+    return null;
+  }
+}
+
 // Path to composer.json (can be overridden by env var)
 const composerPath = process.env.COMPOSER_JSON || './composer.json';
 // Read and parse composer.json
@@ -55,10 +118,9 @@ function githubApi(path) {
       statusCode = res.statusCode;
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
-        if (process.env.DEBUG) {
-          console.error(`DEBUG: [${path}] HTTP ${statusCode}`);
-          console.error(`DEBUG: [${path}] Raw body:`, data);
-        }
+        debug(`[${path}] HTTP ${statusCode}`);
+        debug(`[${path}] Raw body:`, data);
+
         if (statusCode >= 200 && statusCode < 300) {
           try { resolve(JSON.parse(data)); } catch (e) { resolve({}); }
         } else {
@@ -127,9 +189,7 @@ async function getRepoDescription(owner, repo) {
       description = truncate(repoInfo.description, 25);
     }
   } catch (e) {
-    if (process.env.DEBUG) {
-      console.error(`DEBUG: Error fetching repo description for ${owner}/${repo}:`, e);
-    }
+    debug(`Error fetching repo description for ${owner}/${repo}:`, e);
   }
   return description;
 }
@@ -144,25 +204,22 @@ async function getRepoDescription(owner, repo) {
 async function getBranchAge(owner, repo, branch) {
   let age = '-';
   try {
-    const apiPath = `/repos/${owner}/${repo}/commits?sha=${branch}&per_page=1`;
-    if (process.env.DEBUG) {
-      console.error(`DEBUG: Fetching commits from: https://api.github.com${apiPath}`);
-    }
+    // Encode branch name for URL safety
+    const encodedBranch = encodeURIComponent(branch);
+    const apiPath = `/repos/${owner}/${repo}/commits?sha=${encodedBranch}&per_page=1`;
+
+    debug(`Fetching commits from: https://api.github.com${apiPath}`);
+
     const commits = await githubApi(apiPath);
-    if (process.env.DEBUG) {
-      console.error('DEBUG: Commits API response:', JSON.stringify(commits, null, 2));
-    }
+    debug('Commits API response:', JSON.stringify(commits, null, 2));
+
     if (Array.isArray(commits) && commits[0] && commits[0].commit && commits[0].commit.author && commits[0].commit.author.date) {
       age = relativeTime(commits[0].commit.author.date);
     } else {
-      if (process.env.DEBUG) {
-        console.error(`DEBUG: No commit found for ${owner}/${repo} branch ${branch}`);
-      }
+      debug(`No commit found for ${owner}/${repo} branch ${branch}`);
     }
   } catch (e) {
-    if (process.env.DEBUG) {
-      console.error(`DEBUG: Error fetching commit for ${owner}/${repo} branch ${branch}:`, e);
-    }
+    debug(`Error fetching commit for ${owner}/${repo} branch ${branch}:`, e);
   }
   return age;
 }
@@ -177,18 +234,27 @@ async function getBranchAge(owner, repo, branch) {
 async function getPRInfo(owner, repo, branch) {
   let forkPr = 'No PR', forkMerged = '-';
   try {
-    const pulls = await githubApi(`/repos/${owner}/${repo}/pulls?head=${owner}:${branch}`);
+    // Encode the branch name properly for URLs, especially important for branches with slashes
+    const encodedBranch = encodeURIComponent(branch);
+
+    debug(`Checking PRs for ${owner}/${repo} branch "${branch}" (encoded as "${encodedBranch}")`);
+
+    // GitHub API requires the format "owner:branch" for the head parameter
+    const pulls = await githubApi(`/repos/${owner}/${repo}/pulls?head=${owner}:${encodedBranch}`);
+
+    debug(`Found ${Array.isArray(pulls) ? pulls.length : 0} PRs for branch ${branch}`);
+
     if (Array.isArray(pulls) && pulls[0]) {
       forkPr = `[PR](${pulls[0].html_url})`;
       // Check merged status
       const prNum = pulls[0].number;
       const prMerge = await githubApi(`/repos/${owner}/${repo}/pulls/${prNum}/merge`);
       forkMerged = prMerge && prMerge.merged ? 'Yes' : 'No';
+
+      debug(`PR found at ${pulls[0].html_url}, merged status: ${forkMerged}`);
     }
   } catch (e) {
-    if (process.env.DEBUG) {
-      console.error(`DEBUG: Error fetching PR for ${owner}/${repo} branch ${branch}:`, e);
-    }
+    debug(`Error fetching PR for ${owner}/${repo} branch ${branch}:`, e);
   }
   return { forkPr, forkMerged };
 }
@@ -202,29 +268,157 @@ async function getForkStatus(fork) {
   // Extract repo URL and name
   const repoUrl = fork.url;
   const repoName = repoUrl.replace(/\.git$/, '').split('/').pop();
-  // Find the matching dependency (by suffix match)
-  const match = Object.entries(dependencies).find(([pkg, ver]) => pkg.endsWith(repoName));
-  // Extract owner and repo from URL
+
+  // Log all dependencies for debugging
+  debug(`Looking for dependencies matching ${repoName}`);
+  debug(`Repository name is: ${repoName}`);
+  debug(`All dependencies:`, JSON.stringify(dependencies, null, 2));
+
+  // Extract owner and repo from URL - handling different URL formats
   let owner, repo;
   try {
-    [owner, repo] = repoUrl.match(/github.com[:/]+([^/]+)\/([^/.]+)/).slice(1, 3);
+    const urlMatch = repoUrl.match(/github\.com[:/]+([^/]+)\/([^/.]+)/);
+    if (urlMatch && urlMatch.length >= 3) {
+      owner = urlMatch[1];
+      repo = urlMatch[2];
+    }
   } catch {
     owner = repo = undefined;
   }
+
+  debug(`Extracted owner: ${owner}, repo: ${repo} from URL: ${repoUrl}`);
+
+  // Try to get package name directly from the repository's composer.json
+  let match = null;
+  if (owner && repo) {
+    const packageNameFromRepo = await getPackageNameFromRepo(owner, repo);
+    if (packageNameFromRepo && dependencies[packageNameFromRepo]) {
+      match = [packageNameFromRepo, dependencies[packageNameFromRepo]];
+      debug(`Found match using package name from composer.json: ${packageNameFromRepo}`);
+    }
+  }
+
+  // If no match by package name from repo, check for direct name match (case insensitive)
+  if (!match) {
+    const exactMatches = Object.entries(dependencies).filter(([pkg, ver]) => {
+      const pkgName = pkg.split('/').pop(); // Get the last part after '/'
+      const pkgNameLower = pkgName.toLowerCase();
+      const repoNameLower = repoName.toLowerCase();
+      return pkgNameLower === repoNameLower;
+    });
+
+    if (exactMatches.length > 0) {
+      match = exactMatches[0];
+      debug(`Found exact package name match: ${match[0]}`);
+    } else {
+      debug(`Using repository name: ${repoName}`);
+
+      // Try to find by package name component (case insensitive)
+      match = Object.entries(dependencies).find(([pkg, ver]) => {
+        const pkgName = pkg.split('/').pop().toLowerCase(); // Get last part after '/' and normalize case
+        const repoNameLower = repoName.toLowerCase();
+        const pkgNameMatch = pkgName === repoNameLower;
+
+        if (pkgNameMatch) {
+          debug(`Package name component match: ${pkg} matches ${repoName}`);
+        }
+
+        return pkgNameMatch;
+      });
+
+      if (match) {
+        debug(`Found name match: ${match[0]}`);
+      }
+
+      // Try to match using vendor from URL + repo name
+      if (!match && owner) {
+        const potentialPackageName = `${owner.toLowerCase()}/${repoName.toLowerCase()}`;
+        debug(`Checking for package with name: ${potentialPackageName}`);
+
+        const vendorMatches = Object.entries(dependencies).filter(([pkg, ver]) => {
+          return pkg.toLowerCase() === potentialPackageName;
+        });
+
+        if (vendorMatches.length > 0) {
+          match = vendorMatches[0];
+          debug(`Found vendor + repo match: ${match[0]}`);
+        }
+      }
+
+      // Also check for full package name matches as a fallback
+      if (!match) {
+        const fullNameMatches = Object.entries(dependencies).filter(([pkg, ver]) => {
+          // Check for variations that include the repo name in the package name
+          return pkg.includes(repoName.toLowerCase());
+        });
+
+        if (fullNameMatches.length > 0) {
+          match = fullNameMatches[0];
+          debug(`Found full package name match: ${match[0]}`);
+        }
+      }
+
+      // If still no match, try suffix match as last resort
+      if (!match) {
+        match = Object.entries(dependencies).find(([pkg, ver]) => {
+          return pkg.toLowerCase().endsWith(repoName.toLowerCase());
+        });
+
+        if (match) {
+          debug(`Found suffix match: ${match[0]}`);
+        }
+      }
+    }
+  }
+
+  // Debug the match if found
+  if (match) {
+    debug(`Found matching dependency for ${repoName}:`, match);
+  } else {
+    debug(`No matching dependency found for ${repoName}`);
+  }
+
   // Always fetch and truncate repo description
   const description = owner && repo ? await getRepoDescription(owner, repo) : '-';
+
+  // If no matching dependency, output dashes but include description
   if (!match) {
-    // If no matching dependency, output dashes but include description
-    return `| - | [${repoName}](${repoUrl.replace('git@github.com:', 'https://github.com/').replace('git://github.com/', 'https://github.com/').replace('https://github.com/', 'https://github.com/')}) | - | - | - | ${description} |`;
+    return `| - | [${repoName}](${normalizeGitHubUrl(repoUrl)}) | - | - | - | ${description} |`;
   }
+
   const [pkg, version] = match;
   let branch = '-';
-  // Only use dev- branches
-  if (version.startsWith('dev-')) branch = version.replace(/^dev-/, '');
-  else return `| - | [${repoName}](${repoUrl.replace('git@github.com:', 'https://github.com/').replace('git://github.com/', 'https://github.com/').replace('https://github.com/', 'https://github.com/')}) | - | - | - | ${description} |`;
+
+  // Debug the version string
+  debug(`Processing version string for ${pkg}: "${version}"`);
+
+  // Early return for non-dev versions
+  if (!version.startsWith('dev-')) {
+    debug(`Not a dev- version: "${version}"`);
+    return `| - | [${repoName}](${normalizeGitHubUrl(repoUrl)}) | - | - | - | ${description} |`;
+  }
+
+  // Extract the branch name from formats like: 'dev-branch' or 'dev-branch as version'
+  const asIndex = version.indexOf(' as ');
+  if (asIndex !== -1) {
+    // For 'dev-branch as version' format, extract just the branch part
+    branch = version.substring(4, asIndex);
+    debug(`Extracted branch name "${branch}" from aliased version string`);
+  } else {
+    // For simple 'dev-branch' format
+    branch = version.replace(/^dev-/, '');
+    debug(`Extracted branch name "${branch}" from simple dev- version string`);
+  }
+
+  // Additional debug info for complex branch names
+  if (branch.includes('/')) {
+    debug(`Branch name contains slashes: "${branch}"`);
+  }
   // Markdown links for package and branch
   const pkgLink = `[${repoName}](https://github.com/${owner}/${repo})`;
-  const branchLink = `[${branch}](https://github.com/${owner}/${repo}/tree/${branch})`;
+  // URL encode the branch for the link
+  const encodedBranchForUrl = encodeURIComponent(branch);
+  const branchLink = `[${branch}](https://github.com/${owner}/${repo}/tree/${encodedBranchForUrl})`;
   // Get last commit date for the branch
   const age = owner && repo ? await getBranchAge(owner, repo, branch) : '-';
   // Get PR status for the branch
