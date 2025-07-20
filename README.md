@@ -22,12 +22,12 @@ In your workflow, define a step which refers to the action:
 
 This is an example of the output for the fork/PR status table:
 
-| Age | Package | Branch | Fork PR | Merged | Description |
-| ---- | ------- | ------ | ------- | ------ | ----------- |
-| 9 months ago | [silverstripe-date-range-field](https://github.com/silverstripeltd/silverstripe-date-range-field) | [feature/support-cms-5](https://github.com/silverstripeltd/silverstripe-date-range-field/tree/feature/support-cms-5) | [PR](https://github.com/silverstripeltd/silverstripe-date-range-field/pull/1) | No | Date range field for Silv… |
-| 1 year ago | [silverstripe-googlemapfield](https://github.com/silverstripeltd/silverstripe-googlemapfield) | [cms-5](https://github.com/silverstripeltd/silverstripe-googlemapfield/tree/cms-5) | No PR | - | Google Map field for Silv… |
-| 1 year ago | [silverstripe-iplists](https://github.com/silverstripeltd/silverstripe-iplists) | [feature/cms5](https://github.com/silverstripeltd/silverstripe-iplists/tree/feature/cms5) | No PR | - | IP address list manageme… |
-| 1 year ago | [silverstripe-memberprofiles](https://github.com/silverstripeltd/silverstripe-memberprofiles) | [cms-5](https://github.com/silverstripeltd/silverstripe-memberprofiles/tree/cms-5) | No PR | - | Member profile managemen… |
+| Age | Package | Branch | Fork PR | Merged |
+| ---- | ------- | ------ | ------- | ------ |
+| 9 months ago | [silverstripe-date-range-field](https://github.com/silverstripeltd/silverstripe-date-range-field) | [feature/support-cms-5](https://github.com/silverstripeltd/silverstripe-date-range-field/tree/feature/support-cms-5) | [PR](https://github.com/silverstripeltd/silverstripe-date-range-field/pull/1) | No |
+| 1 year ago | [silverstripe-googlemapfield](https://github.com/silverstripeltd/silverstripe-googlemapfield) | [cms-5](https://github.com/silverstripeltd/silverstripe-googlemapfield/tree/cms-5) | No PR | - |
+| 1 year ago | [silverstripe-iplists](https://github.com/silverstripeltd/silverstripe-iplists) | [feature/cms5](https://github.com/silverstripeltd/silverstripe-iplists/tree/feature/cms5) | No PR | - |
+| 1 year ago | [silverstripe-memberprofiles](https://github.com/silverstripeltd/silverstripe-memberprofiles) | [cms-5](https://github.com/silverstripeltd/silverstripe-memberprofiles/tree/cms-5) | No PR | - |
 
 ## Inputs
 
@@ -44,7 +44,6 @@ For each package that is a fork (defined in the `repositories` section of your `
 - **Branch**: Link to the branch in use (from the `dev-branch` version constraint).
 - **Fork PR**: A link to the pull request if found, or a note if not found.
 - **Merged**: Whether the PR has been merged (`Yes`/`No`), or `-` if not applicable.
-- **Description**: The GitHub repo description, truncated to 25 characters.
 
 ## Gotchas
 

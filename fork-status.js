@@ -92,8 +92,8 @@ const dependencies = Object.assign({}, ...requireSections);
 const forks = (composer.repositories || []).filter(r => r.type === 'vcs' && r.url.includes('github.com'));
 
 // Markdown table header and divider
-const tableHeader = '| Age | Package | Branch | Fork PR | Merged | Description |';
-const tableDivider = '| ---- | ------- | ------ | ------- | ------ | ----------- |';
+const tableHeader = '| Age | Package | Branch | Fork PR | Merged |';
+const tableDivider = '| ---- | ------- | ------ | ------- | ------ |';
 
 /**
  * Make a GET request to the GitHub API and parse the JSON response.
@@ -164,35 +164,7 @@ function relativeTime(dateStr) {
   return `${y} year${y === 1 ? '' : 's'} ago`;
 }
 
-/**
- * Truncate a string to a max length, adding ellipsis if needed.
- * @param {string} str
- * @param {number} max
- * @returns {string}
- */
-function truncate(str, max) {
-  if (!str) return '-';
-  return str.length > max ? str.slice(0, max) + '…' : str;
-}
 
-/**
- * Fetch and truncate the GitHub repo description.
- * @param {string} owner
- * @param {string} repo
- * @returns {Promise<string>}
- */
-async function getRepoDescription(owner, repo) {
-  let description = '-';
-  try {
-    const repoInfo = await githubApi(`/repos/${owner}/${repo}`);
-    if (repoInfo && repoInfo.description) {
-      description = truncate(repoInfo.description, 25);
-    }
-  } catch (e) {
-    debug(`Error fetching repo description for ${owner}/${repo}:`, e);
-  }
-  return description;
-}
 
 /**
  * Get the last commit date for a branch, as a relative time string.
@@ -378,12 +350,10 @@ async function getForkStatus(fork) {
     debug(`No matching dependency found for ${repoName}`);
   }
 
-  // Always fetch and truncate repo description
-  const description = owner && repo ? await getRepoDescription(owner, repo) : '-';
 
-  // If no matching dependency, output dashes but include description
+  // If no matching dependency, output dashes
   if (!match) {
-    return `| - | [${repoName}](${normalizeGitHubUrl(repoUrl)}) | - | - | - | ${description} |`;
+    return `| - | [${repoName}](${normalizeGitHubUrl(repoUrl)}) | - | - | - |`;
   }
 
   const [pkg, version] = match;
@@ -395,7 +365,7 @@ async function getForkStatus(fork) {
   // Early return for non-dev versions
   if (!version.startsWith('dev-')) {
     debug(`Not a dev- version: "${version}"`);
-    return `| - | [${repoName}](${normalizeGitHubUrl(repoUrl)}) | - | - | - | ${description} |`;
+    return `| - | [${repoName}](${normalizeGitHubUrl(repoUrl)}) | - | - | - |`;
   }
 
   // Extract the branch name from formats like: 'dev-branch' or 'dev-branch as version'
@@ -424,7 +394,7 @@ async function getForkStatus(fork) {
   // Get PR status for the branch
   const { forkPr, forkMerged } = owner && repo ? await getPRInfo(owner, repo, branch) : { forkPr: 'No PR', forkMerged: '-' };
   // Return the markdown table row
-  return `| ${age} | ${pkgLink} | ${branchLink} | ${forkPr} | ${forkMerged} | ${description} |`;
+  return `| ${age} | ${pkgLink} | ${branchLink} | ${forkPr} | ${forkMerged} |`;
 }
 
 // Main async runner: process each fork and build the table
